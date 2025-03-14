@@ -1,0 +1,4 @@
+# Ignorar application.properties en todos los servicios
+backend/servicio1/src/main/resources/application.properties
+backend/servicio2/src/main/resources/application.properties
+backend/servicio3/src/main/resources/application.properties

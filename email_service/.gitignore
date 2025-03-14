@@ -1,0 +1,76 @@
+# Archivos de ayuda (HELP.md)
+HELP.md
+
+# Directorio de compilación de Maven (target/)
+target/
+# Excepciones para los directorios de compilación dentro de src/main y src/test
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+# Archivos de configuración de Maven (mvnw y mvnw.cmd)
+!.mvn/wrapper/maven-wrapper.jar
+.mvn/wrapper/maven-wrapper.properties
+
+### STS (Spring Tool Suite) ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+# Excepciones para los directorios de compilación dentro de src/main y src/test
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+# Archivos de entorno (variables de entorno)
+.env
+
+# Archivos de configuración de la aplicación (application.properties)
+src/main/resources/application.properties
+
+# Archivos de logs (logs generados por la aplicación)
+*.log
+logs/
+
+# Archivos temporales
+*.tmp
+*.temp
+
+# Archivos de sistema operativo
+.DS_Store
+Thumbs.db
+
+# Archivos de dependencias descargadas (node_modules, por ejemplo)
+node_modules/
+
+# Archivos de compilación de frontend (si usas herramientas como npm, webpack, etc.)
+dist/
+build/
+out/
+
+# Archivos de configuración de Docker
+docker-compose.yml
+docker-compose.override.yml
+Dockerfile
+
+# Archivos de configuración de bases de datos (si usas archivos locales)
+*.db
+*.sqlite
