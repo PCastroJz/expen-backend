@@ -54,4 +54,7 @@ public class Transaction {
 
     @Column(nullable = true)
     private Long idSchedule;
+
+    @Column(nullable = false)
+    private boolean pay;
 }

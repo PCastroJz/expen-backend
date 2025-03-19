@@ -60,7 +60,7 @@ public class ApplicationConfig {
 
     @Bean
     public CacheManager cacheManager() {
-        CaffeineCacheManager cacheManager = new CaffeineCacheManager("verificationCodes");
+        CaffeineCacheManager cacheManager = new CaffeineCacheManager("verificationCodes", "resetTokens");
         cacheManager.setCaffeine(Caffeine.newBuilder()
                 .expireAfterWrite(10, TimeUnit.MINUTES)
                 .maximumSize(1000));

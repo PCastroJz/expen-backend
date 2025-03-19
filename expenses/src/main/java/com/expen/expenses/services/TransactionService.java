@@ -1,5 +1,6 @@
 package com.expen.expenses.services;
 
+import com.expen.expenses.dtos.BalanceDTO;
 import com.expen.expenses.dtos.TransactionDTO;
 import com.expen.expenses.dtos.TransactionRequest;
 import com.expen.expenses.jwt.JwtUtil;
@@ -205,6 +206,97 @@ public class TransactionService {
         }
 
         return userId;
+    }
+
+    public BalanceDTO calculateBalance(Long accountId, LocalDate startDate, LocalDate endDate) {
+        log.info("Calculando balance para la cuenta con id: " + accountId + " entre " + startDate + " y " + endDate);
+
+        Long userId = extractUserIdFromToken();
+
+        if (!isUserOwnerOrMemberOfAccount(userId, accountId)) {
+            log.warning("El usuario con id " + userId + " no tiene permisos para ver transacciones de la cuenta con id "
+                    + accountId);
+            throw new IllegalStateException("No tienes permisos para ver transacciones de esta cuenta");
+        }
+
+        List<Transaction> transactions = transactionRepository.findByAccountIdAndDateBetween(accountId, startDate,
+                endDate);
+
+        List<Transaction> filteredTransactions = transactions.stream()
+                .filter(t -> !t.isSchedule() || t.isPay())
+                .collect(Collectors.toList());
+
+        double totalIncome = filteredTransactions.stream()
+                .filter(t -> "Ingreso".equals(t.getType()))
+                .mapToDouble(Transaction::getAmount)
+                .sum();
+
+        double totalExpenses = filteredTransactions.stream()
+                .filter(t -> "Gasto".equals(t.getType()))
+                .mapToDouble(Transaction::getAmount)
+                .sum();
+
+        double balance = totalIncome - totalExpenses;
+
+        BalanceDTO balanceDTO = new BalanceDTO();
+        balanceDTO.setTotalIncome(totalIncome);
+        balanceDTO.setTotalExpenses(totalExpenses);
+        balanceDTO.setBalance(balance);
+        balanceDTO.setTransactions(filteredTransactions.stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList()));
+
+        return balanceDTO;
+    }
+
+    public TransactionDTO markTransactionAsPaid(Long transactionId) {
+        log.info("Marcando transacción con id: " + transactionId + " como pagada");
+    
+        Transaction transaction = transactionRepository.findById(transactionId)
+                .orElseThrow(() -> new IllegalArgumentException("Transacción no encontrada"));
+    
+        Long userId = extractUserIdFromToken();
+        Long accountId = transaction.getAccount().getId();
+    
+        if (!isUserOwnerOrMemberOfAccount(userId, accountId)) {
+            log.warning("El usuario con id " + userId + " no tiene permisos para modificar la transacción con id "
+                    + transactionId);
+            throw new IllegalStateException("No tienes permisos para modificar esta transacción");
+        }
+    
+        if (!transaction.isSchedule()) {
+            log.warning("La transacción con id " + transactionId + " no es programada");
+            throw new IllegalStateException("Solo las transacciones programadas pueden marcarse como pagadas");
+        }
+    
+        if (transaction.isPay()) {
+            log.warning("La transacción con id " + transactionId + " ya está marcada como pagada");
+            throw new IllegalStateException("La transacción ya está marcada como pagada");
+        }
+    
+        transaction.setPay(true);
+        Transaction updatedTransaction = transactionRepository.save(transaction);
+    
+        return mapToDTO(updatedTransaction);
+    }
+
+    public List<TransactionDTO> getTransactionsByTypeAndDateRange(Long accountId, String type, LocalDate startDate, LocalDate endDate) {
+        log.info("Buscando transacciones de tipo " + type + " entre " + startDate + " y " + endDate
+                + " para la cuenta con id: " + accountId);
+    
+        Long userId = extractUserIdFromToken();
+    
+        if (!isUserOwnerOrMemberOfAccount(userId, accountId)) {
+            log.warning("El usuario con id " + userId + " no tiene permisos para ver transacciones de la cuenta con id "
+                    + accountId);
+            throw new IllegalStateException("No tienes permisos para ver transacciones de esta cuenta");
+        }
+    
+        List<Transaction> transactions = transactionRepository.findByAccountIdAndTypeAndDateBetween(accountId, type, startDate, endDate);
+    
+        return transactions.stream()
+                .map(this::mapToDTO)
+                .collect(Collectors.toList());
     }
 
 }

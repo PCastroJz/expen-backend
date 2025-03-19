@@ -23,7 +23,7 @@ public class JwtService {
 
     @Value("${jwt.secret}")
     private String SECRET_KEY;
-
+    
     public String getToken(UserDetails user, Long userId) {
         Map<String, Object> extraClaims = new HashMap<>();
         extraClaims.put("userId", userId);
@@ -39,7 +39,7 @@ public class JwtService {
                 .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 60 * 24))
                 .signWith(getKey(), SignatureAlgorithm.HS256)
                 .compact();
-        
+
         log.info("Token generado para el usuario: {}", user.getUsername());
         log.debug("Token generado: {}", token);
         return token;
@@ -85,7 +85,7 @@ public class JwtService {
         final String username = extractUsername(token);
         boolean isUsernameValid = username.equals(userDetails.getUsername());
         boolean isTokenExpired = isTokenExpired(token);
-        
+
         log.info("Validando token para el usuario: {}", username);
         log.debug("Username válido: {}", isUsernameValid);
         log.debug("Token expirado: {}", isTokenExpired);
@@ -96,10 +96,10 @@ public class JwtService {
     private boolean isTokenExpired(String token) {
         Date expirationDate = extractExpiration(token);
         boolean isExpired = expirationDate.before(new Date());
-        
+
         log.debug("Fecha de expiración del token: {}", expirationDate);
         log.debug("Token expirado: {}", isExpired);
-        
+
         return isExpired;
     }
 
@@ -107,5 +107,28 @@ public class JwtService {
         Date expirationDate = extractClaim(token, Claims::getExpiration);
         log.debug("Fecha de expiración extraída del token: {}", expirationDate);
         return expirationDate;
+    }
+
+    public String generateResetToken(String email) {
+        return Jwts.builder()
+                .setSubject(email)
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + 5 * 60 * 1000))
+                .signWith(getKey(), SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    public String validateResetToken(String token) {
+        try {
+            Claims claims = Jwts.parserBuilder()
+                    .setSigningKey(SECRET_KEY)
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+
+            return claims.getSubject();
+        } catch (Exception e) {
+            throw new RuntimeException("Token inválido o expirado");
+        }
     }
 }

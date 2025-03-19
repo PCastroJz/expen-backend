@@ -1,5 +1,6 @@
 package com.expen.expenses.controllers;
 
+import com.expen.expenses.dtos.BalanceDTO;
 import com.expen.expenses.dtos.TransactionDTO;
 import com.expen.expenses.dtos.TransactionRequest;
 import com.expen.expenses.services.TransactionService;
@@ -57,6 +58,31 @@ public class TransactionController {
             @RequestParam LocalDate startDate,
             @RequestParam LocalDate endDate) {
         List<TransactionDTO> transactions = transactionService.getTransactionsByDateRange(accountId, startDate, endDate);
+        return ResponseEntity.ok(transactions);
+    }
+
+    @GetMapping("/balance")
+    public ResponseEntity<BalanceDTO> calculateBalance(
+            @RequestParam Long accountId,
+            @RequestParam LocalDate startDate,
+            @RequestParam LocalDate endDate) {
+        BalanceDTO balanceDTO = transactionService.calculateBalance(accountId, startDate, endDate);
+        return ResponseEntity.ok(balanceDTO);
+    }
+
+    @PatchMapping("/{id}/mark-as-paid")
+    public ResponseEntity<TransactionDTO> markTransactionAsPaid(@PathVariable Long id) {
+        TransactionDTO transactionDTO = transactionService.markTransactionAsPaid(id);
+        return ResponseEntity.ok(transactionDTO);
+    }
+
+    @GetMapping("/filter")
+    public ResponseEntity<List<TransactionDTO>> getTransactionsByTypeAndDateRange(
+            @RequestParam Long accountId,
+            @RequestParam String type,
+            @RequestParam LocalDate startDate,
+            @RequestParam LocalDate endDate) {
+        List<TransactionDTO> transactions = transactionService.getTransactionsByTypeAndDateRange(accountId, type, startDate, endDate);
         return ResponseEntity.ok(transactions);
     }
 }
