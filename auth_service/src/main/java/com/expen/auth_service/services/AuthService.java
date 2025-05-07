@@ -25,6 +25,7 @@ import org.springframework.util.FileCopyUtils;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
+import com.expen.auth_service.controllers.UserUpdateController;
 import com.expen.auth_service.dtos.ApiResponse;
 import com.expen.auth_service.dtos.EmailRequest;
 import com.expen.auth_service.jwt.JwtService;
@@ -49,6 +50,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final CacheManager cacheManager;
+    private final UserUpdateController userUpdateController;
 
     @Autowired
     private RestTemplate restTemplate;
@@ -56,9 +58,15 @@ public class AuthService {
     @Value("${auth.service.api-key}")
     private String apiKey;
 
+    @Value("${email.service.url}")
+    private String emailServiceUrl;
+
+    @Value("${frontend.reset-password-url}")
+    private String resetPasswordBaseUrl;
+
     private final SecureRandom random = new SecureRandom();
 
-    public ResponseEntity<ApiResponse<String>> login(LoginRequest request) {
+    public ResponseEntity<ApiResponse<User>> login(LoginRequest request) {
         try {
             logger.info("Iniciando autenticación para el usuario: {}", request.getEmail());
 
@@ -77,7 +85,7 @@ public class AuthService {
 
             if (!user.isValidate()) {
                 logger.warn("El usuario no ha verificado su correo electrónico: {}", request.getEmail());
-                ApiResponse<String> errorResponse = ApiResponse.<String>builder()
+                ApiResponse<User> errorResponse = ApiResponse.<User>builder()
                         .code(403)
                         .message("Por favor, verifica tu correo electrónico para acceder al sistema")
                         .data(null)
@@ -88,19 +96,20 @@ public class AuthService {
             String token = jwtService.getToken(user, user.getId());
             logger.info("Token generado para el usuario: {}", request.getEmail());
 
-            ApiResponse<String> response = ApiResponse.<String>builder()
+            ApiResponse<User> response = ApiResponse.<User>builder()
                     .code(200)
                     .message("Autenticación exitosa")
-                    .data(token)
+                    .token(token)
+                    .data(user)
                     .build();
 
             return ResponseEntity.ok(response);
 
         } catch (AuthenticationException e) {
-            ApiResponse<String> errorResponse;
+            ApiResponse<User> errorResponse;
             if (e instanceof UsernameNotFoundException) {
                 logger.error("Usuario no encontrado: {}", request.getEmail(), e);
-                errorResponse = ApiResponse.<String>builder()
+                errorResponse = ApiResponse.<User>builder()
                         .code(404)
                         .message("Usuario no encontrado")
                         .data(null)
@@ -108,7 +117,7 @@ public class AuthService {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
             } else {
                 logger.error("Error de autenticación para el usuario: {}", request.getEmail(), e);
-                errorResponse = ApiResponse.<String>builder()
+                errorResponse = ApiResponse.<User>builder()
                         .code(401)
                         .message("Credenciales inválidas")
                         .data(null)
@@ -117,7 +126,7 @@ public class AuthService {
             }
         } catch (Exception e) {
             logger.error("Error inesperado durante el login para el usuario: {}", request.getEmail(), e);
-            ApiResponse<String> errorResponse = ApiResponse.<String>builder()
+            ApiResponse<User> errorResponse = ApiResponse.<User>builder()
                     .code(500)
                     .message("Error durante el login")
                     .data(null)
@@ -133,7 +142,7 @@ public class AuthService {
             if (userRepository.findByEmail(request.getEmail()).isPresent()) {
                 logger.warn("El usuario ya existe: {}", request.getEmail());
                 return ResponseEntity.status(HttpStatus.CONFLICT)
-                        .body(new ApiResponse<>(409, "El usuario ya existe", null));
+                        .body(new ApiResponse<>(409, "El usuario ya existe", null, null));
             }
 
             User user = User.builder()
@@ -145,6 +154,8 @@ public class AuthService {
                     .build();
 
             userRepository.save(user);
+            userUpdateController.broadcastNewUser(user);
+
             logger.info("Usuario registrado exitosamente: {}", request.getEmail());
 
             String verificationCode = generateVerificationCode();
@@ -155,12 +166,12 @@ public class AuthService {
             logger.info("Correo de verificación enviado a: {}", request.getEmail());
 
             return ResponseEntity.ok(new ApiResponse<>(200,
-                    "Usuario registrado, revisa tu correo para el código de verificación", null));
+                    "Usuario registrado, revisa tu correo para el código de verificación", null, null));
 
         } catch (Exception e) {
             logger.error("Error en el registro para el usuario: {}", request.getEmail(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ApiResponse<>(500, "Error en el registro", null));
+                    .body(new ApiResponse<>(500, "Error en el registro", null, null));
         }
     }
 
@@ -212,7 +223,6 @@ public class AuthService {
         try {
             logger.info("Enviando correo de verificación a: {}", email);
 
-            String emailServiceUrl = "http://localhost:8080/email/send";
             HttpHeaders headers = new HttpHeaders();
             headers.set("x-api-key", apiKey);
             headers.set("Content-Type", "application/json");
@@ -256,16 +266,16 @@ public class AuthService {
                 userRepository.save(user);
                 logger.info("Usuario verificado exitosamente: {}", email);
 
-                return ResponseEntity.ok(new ApiResponse<>(200, "Código verificado correctamente", null));
+                return ResponseEntity.ok(new ApiResponse<>(200, "Código verificado correctamente", null, null));
             } else {
                 logger.warn("Código inválido o expirado para el usuario: {}", email);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                        .body(new ApiResponse<>(400, "Código inválido o expirado", null));
+                        .body(new ApiResponse<>(400, "Código inválido o expirado", null, null));
             }
         } catch (Exception e) {
             logger.error("Error verificando el código para el usuario: {}", email, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ApiResponse<>(500, "Error verificando el código", null));
+                    .body(new ApiResponse<>(500, "Error verificando el código", null, null));
         }
     }
 
@@ -380,12 +390,11 @@ public class AuthService {
         try {
             logger.info("Enviando correo de restablecimiento de contraseña a: {}", email);
 
-            String emailServiceUrl = "http://localhost:8080/email/send";
             HttpHeaders headers = new HttpHeaders();
             headers.set("x-api-key", apiKey);
             headers.set("Content-Type", "application/json");
 
-            String resetLink = "http://localhost:5173/reset-password?token=" + resetToken;
+            String resetLink = resetPasswordBaseUrl + "?token=" + resetToken;
 
             String htmlTemplate = readFileFromClasspath("templates/reset_password_email.html");
 
@@ -414,7 +423,6 @@ public class AuthService {
         try {
             logger.info("Restableciendo contraseña con token: {}", token);
 
-            // Validar el token y extraer el correo electrónico
             String email = jwtService.validateResetToken(token);
             if (email == null) {
                 logger.error("Token inválido o expirado: {}", token);
@@ -426,7 +434,6 @@ public class AuthService {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
             }
 
-            // Verificar si el token ya fue utilizado
             Cache cache = cacheManager.getCache("resetTokens");
             if (cache != null && cache.get(email) == null) {
                 logger.error("Token ya utilizado o inválido: {}", token);

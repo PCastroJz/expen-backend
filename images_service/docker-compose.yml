@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  image-service:
+    build: .
+    container_name: expen-image-service
+    ports:
+      - "8083:8083"
+    volumes:
+      - images_storage:/app/images
+    environment:
+      IMAGE_STORAGE_PATH: /app/images
+    networks:
+      - backend
+
+volumes:
+  images_storage:
+
+networks:
+  backend:
+    external: true

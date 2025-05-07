@@ -1,5 +1,6 @@
 package com.expen.expenses.services;
 
+import com.expen.expenses.controllers.AccountNotificationController;
 import com.expen.expenses.dtos.AccountDTO;
 import com.expen.expenses.dtos.AccountRequest;
 import com.expen.expenses.jwt.JwtUtil;
@@ -13,10 +14,14 @@ import com.expen.expenses.repositories.TransactionRepository;
 import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
@@ -40,6 +45,9 @@ public class AccountServices {
     @Autowired
     private TransactionRepository transactionRepository;
 
+    @Autowired
+    private AccountNotificationController accountNotificationController;
+
     public AccountDTO createAccount(AccountRequest accountRequest) {
         Long userId = extractUserIdFromToken();
 
@@ -59,7 +67,11 @@ public class AccountServices {
         accountUserRepository.save(accountUser);
         log.info("Registro en account_users creado para el userId: " + userId + " con rol admin");
 
-        return mapToDTO(createdAccount);
+        AccountDTO accountDTO = mapToDTO(createdAccount);
+
+        accountNotificationController.notifyAccountUpdate(accountDTO, "CREATE");
+
+        return accountDTO;
     }
 
     public List<AccountDTO> getAccounts() {
@@ -109,40 +121,50 @@ public class AccountServices {
 
         account.setName(accountRequest.getName());
         log.info("Actualizando cuenta con id: " + id);
+
         Account updatedAccount = accountRepository.save(account);
 
-        return mapToDTO(updatedAccount);
+        AccountDTO accountDTO = mapToDTO(updatedAccount);
+
+        accountNotificationController.notifyAccountUpdate(accountDTO, "UPDATE");
+
+        return accountDTO;
     }
 
     @Transactional
-    public void deleteAccount(Long id) {
+    public Map<String, Object> deleteAccount(Long id) {
         Long userId = extractUserIdFromToken();
 
         Account account = accountRepository.findById(id)
-                .orElseThrow(() -> {
-                    log.severe("Cuenta no encontrada con id: " + id);
-                    return new RuntimeException("Cuenta no encontrada con id: " + id);
-                });
+                .orElseThrow(() -> new RuntimeException("Cuenta no encontrada con id: " + id));
 
         if (!account.getUserId().equals(userId)) {
-            log.warning("El userId del token no coincide con el userId de la cuenta");
             throw new RuntimeException("No tienes permiso para eliminar esta cuenta");
         }
 
         List<Transaction> transactions = transactionRepository.findByAccountId(account.getId());
         if (!transactions.isEmpty()) {
-            log.info("Eliminando " + transactions.size() + " transacciones asociadas a la cuenta con id: " + id);
             transactionRepository.deleteAll(transactions);
         }
 
         List<AccountUser> accountUsers = accountUserRepository.findByAccountId(account.getId());
         if (!accountUsers.isEmpty()) {
-            log.info("Eliminando " + accountUsers.size() + " AccountUser asociados a la cuenta con id: " + id);
             accountUserRepository.deleteAll(accountUsers);
         }
 
-        log.info("Eliminando cuenta con id: " + id);
         accountRepository.delete(account);
+
+        AccountDTO accountDTO = mapToDTO(account);
+
+        accountNotificationController.notifyAccountUpdate(accountDTO, "DELETE");
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "Cuenta eliminada exitosamente");
+        response.put("accountId", account.getId());
+        response.put("deletedTransactions", transactions.size());
+        response.put("deletedAccountUsers", accountUsers.size());
+
+        return response;
     }
 
     private Long extractUserIdFromToken() {
@@ -164,7 +186,7 @@ public class AccountServices {
         return userId;
     }
 
-    private AccountDTO mapToDTO(Account account) {
+    public AccountDTO mapToDTO(Account account) {
         AccountDTO dto = new AccountDTO();
         dto.setId(account.getId());
         dto.setName(account.getName());

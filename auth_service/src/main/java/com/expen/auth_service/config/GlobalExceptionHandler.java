@@ -2,6 +2,7 @@ package com.expen.auth_service.config;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.MessagingException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -13,7 +14,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ApiResponse<Void>> handleRuntimeException(RuntimeException ex) {
-        ApiResponse<Void> response = new ApiResponse<>(403, ex.getMessage(), null);
+        ApiResponse<Void> response = new ApiResponse<>(403, ex.getMessage(), null, null);
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
     }
 
@@ -23,8 +24,13 @@ public class GlobalExceptionHandler {
 
         ex.getBindingResult().getFieldErrors().forEach(error -> errors.append(error.getDefaultMessage()).append(". "));
 
-        ApiResponse<Void> response = new ApiResponse<>(400, errors.toString(), null);
+        ApiResponse<Void> response = new ApiResponse<>(400, errors.toString(), null, null);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
     }
 
+    @ExceptionHandler(MessagingException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMessagingException(MessagingException ex) {
+        ApiResponse<Void> response = new ApiResponse<>(403, ex.getMessage(), null, null);
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
+    }
 }

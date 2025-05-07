@@ -8,6 +8,7 @@ import java.util.function.Function;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.stereotype.Service;
 
 import io.jsonwebtoken.Claims;
@@ -23,7 +24,9 @@ public class JwtService {
 
     @Value("${jwt.secret}")
     private String SECRET_KEY;
-    
+
+    private UserDetailsService userDetailsService;
+
     public String getToken(UserDetails user, Long userId) {
         Map<String, Object> extraClaims = new HashMap<>();
         extraClaims.put("userId", userId);
@@ -82,15 +85,10 @@ public class JwtService {
     }
 
     public boolean isTokenValid(String token, UserDetails userDetails) {
+        if (!validateJwtToken(token)) return false;
+        
         final String username = extractUsername(token);
-        boolean isUsernameValid = username.equals(userDetails.getUsername());
-        boolean isTokenExpired = isTokenExpired(token);
-
-        log.info("Validando token para el usuario: {}", username);
-        log.debug("Username válido: {}", isUsernameValid);
-        log.debug("Token expirado: {}", isTokenExpired);
-
-        return isUsernameValid && !isTokenExpired;
+        return username.equals(userDetails.getUsername());
     }
 
     private boolean isTokenExpired(String token) {
@@ -129,6 +127,27 @@ public class JwtService {
             return claims.getSubject();
         } catch (Exception e) {
             throw new RuntimeException("Token inválido o expirado");
+        }
+    }
+
+    public boolean validateJwtToken(String token) {
+        try {
+            Jwts.parserBuilder()
+                    .setSigningKey(getKey())
+                    .build()
+                    .parseClaimsJws(token);
+
+            if (isTokenExpired(token)) {
+                log.warn("Token expirado: {}", token);
+                return false;
+            }
+
+            log.info("Token validado exitosamente");
+            return true;
+
+        } catch (Exception e) {
+            log.error("Token inválido: {} - Error: {}", token, e.getMessage());
+            return false;
         }
     }
 }

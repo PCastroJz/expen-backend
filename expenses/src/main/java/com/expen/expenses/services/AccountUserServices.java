@@ -11,6 +11,7 @@ import com.expen.expenses.repositories.AccountUserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -42,6 +43,9 @@ public class AccountUserServices {
 
     @Autowired
     private RestTemplate restTemplate;
+
+    @Value("${auth.service.url}")
+    private String authServiceUrl;
 
     public AccountUserDTO createAccountUser(Long accountId, String email) {
         Long authenticatedUserId = extractUserIdFromToken();
@@ -119,7 +123,7 @@ public class AccountUserServices {
     }
 
     private Long getUserIdByEmail(String email) {
-        String url = "http://localhost:8081/user/find-by-email?email=" + email;
+        String url = authServiceUrl + "/user/find-by-email?email=" + email;
         final String authorizationHeader = request.getHeader("Authorization");
 
         HttpHeaders headers = new HttpHeaders();

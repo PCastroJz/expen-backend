@@ -35,7 +35,10 @@ public class TransactionRequest {
     @NotNull(message = "El ID de la cuenta es obligatorio")
     private Long accountId;
 
-
     private boolean schedule = false;
-    private Long idSchedule = null;
+
+    private boolean pay = false;
+
+    @NotNull(message = "El metodo es obligatorio")
+    private String paymentMethod;
 }

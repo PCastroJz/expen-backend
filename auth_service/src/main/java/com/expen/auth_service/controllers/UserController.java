@@ -2,6 +2,8 @@ package com.expen.auth_service.controllers;
 
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -10,6 +12,7 @@ import com.expen.auth_service.services.UserService;
 import com.expen.auth_service.dtos.UserUpdateRequest;
 import com.expen.auth_service.dtos.ApiResponse;
 import com.expen.auth_service.dtos.ChangePasswordRequest;
+import com.expen.auth_service.dtos.UserBasicInfo;
 
 import lombok.RequiredArgsConstructor;
 
@@ -43,15 +46,20 @@ public class UserController {
     }
 
     @PatchMapping("/{id}/profile-picture")
-    public ResponseEntity<ApiResponse<String>> updateProfilePicture(
+    public ResponseEntity<ApiResponse<User>> updateProfilePicture(
             @PathVariable Long id,
             @RequestParam("file") MultipartFile file) {
-        ApiResponse<String> response = userService.updateProfilePicture(id, file);
+        ApiResponse<User> response = userService.updateProfilePicture(id, file);
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/find-by-email")
     public Long getUserIdByEmail(@RequestParam String email) {
         return userService.getUserIdByEmail(email);
+    }
+
+    @GetMapping("/public-profiles")
+    public ResponseEntity<ApiResponse<List<UserBasicInfo>>> getPublicProfiles() {
+        return ResponseEntity.ok(userService.getAllPublicProfiles());
     }
 }

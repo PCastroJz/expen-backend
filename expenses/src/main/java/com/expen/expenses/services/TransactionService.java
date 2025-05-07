@@ -1,5 +1,6 @@
 package com.expen.expenses.services;
 
+import com.expen.expenses.controllers.TransactionNotificationController;
 import com.expen.expenses.dtos.BalanceDTO;
 import com.expen.expenses.dtos.TransactionDTO;
 import com.expen.expenses.dtos.TransactionRequest;
@@ -42,6 +43,9 @@ public class TransactionService {
     @Autowired
     private HttpServletRequest request;
 
+    @Autowired
+    private TransactionNotificationController transactionNotificationController;
+
     public TransactionDTO createTransaction(TransactionRequest transactionRequest) {
         log.info("Iniciando creacion transacción: ");
         Long userId = extractUserIdFromToken();
@@ -69,12 +73,17 @@ public class TransactionService {
         transaction.setAccount(accounts);
         transaction.setUserId(userId);
         transaction.setSchedule(transactionRequest.isSchedule());
-        transaction.setIdSchedule(transactionRequest.getIdSchedule());
+        transaction.setPay(transactionRequest.isPay());
+        transaction.setPaymentMethod(transactionRequest.getPaymentMethod());
 
         log.info("Creando transacción: " + transaction);
         Transaction savedTransaction = transactionRepository.save(transaction);
 
-        return mapToDTO(savedTransaction);
+        TransactionDTO savedTransactionDTO = mapToDTO(savedTransaction);
+
+        transactionNotificationController.notifyNewTransaction(savedTransactionDTO, "CREATE");
+
+        return savedTransactionDTO;
     }
 
     public TransactionDTO getTransactionById(Long id) {
@@ -130,10 +139,16 @@ public class TransactionService {
         transaction.setAccount(accountRepository.findById(transactionRequest.getAccountId())
                 .orElseThrow(() -> new IllegalArgumentException("La cuenta no existe")));
         transaction.setSchedule(transactionRequest.isSchedule());
-        transaction.setIdSchedule(transactionRequest.getIdSchedule());
+        transaction.setPay(transactionRequest.isPay());
+        transaction.setPaymentMethod(transactionRequest.getPaymentMethod());
 
         Transaction updatedTransaction = transactionRepository.save(transaction);
-        return mapToDTO(updatedTransaction);
+
+        TransactionDTO savedTransactionDTO = mapToDTO(updatedTransaction);
+
+        transactionNotificationController.notifyNewTransaction(savedTransactionDTO, "UPDATE");
+
+        return savedTransactionDTO;
     }
 
     public void deleteTransaction(Long id) {
@@ -150,6 +165,12 @@ public class TransactionService {
         }
 
         transactionRepository.deleteById(id);
+
+        TransactionDTO deleteTransactionDTO = mapToDTO(transaction);
+
+        log.info("Enviando notificación DELETE al WebSocket para transacción: " + deleteTransactionDTO.getId());
+        transactionNotificationController.notifyNewTransaction(deleteTransactionDTO, "DELETE");
+
     }
 
     public List<TransactionDTO> getTransactionsByDateRange(Long accountId, LocalDate startDate, LocalDate endDate) {
@@ -178,7 +199,8 @@ public class TransactionService {
         dto.setDescription(transaction.getDescription());
         dto.setAccountId(transaction.getAccount().getId());
         dto.setSchedule(transaction.isSchedule());
-        dto.setIdSchedule(transaction.getIdSchedule());
+        dto.setPay(transaction.isPay());
+        dto.setPaymentMethod(transaction.getPaymentMethod());
         return dto;
     }
 
@@ -251,49 +273,57 @@ public class TransactionService {
 
     public TransactionDTO markTransactionAsPaid(Long transactionId) {
         log.info("Marcando transacción con id: " + transactionId + " como pagada");
-    
+
         Transaction transaction = transactionRepository.findById(transactionId)
                 .orElseThrow(() -> new IllegalArgumentException("Transacción no encontrada"));
-    
+
         Long userId = extractUserIdFromToken();
         Long accountId = transaction.getAccount().getId();
-    
+
         if (!isUserOwnerOrMemberOfAccount(userId, accountId)) {
             log.warning("El usuario con id " + userId + " no tiene permisos para modificar la transacción con id "
                     + transactionId);
             throw new IllegalStateException("No tienes permisos para modificar esta transacción");
         }
-    
+
         if (!transaction.isSchedule()) {
             log.warning("La transacción con id " + transactionId + " no es programada");
             throw new IllegalStateException("Solo las transacciones programadas pueden marcarse como pagadas");
         }
-    
+
         if (transaction.isPay()) {
             log.warning("La transacción con id " + transactionId + " ya está marcada como pagada");
             throw new IllegalStateException("La transacción ya está marcada como pagada");
         }
-    
+
         transaction.setPay(true);
+        transaction.setDate(LocalDate.now());
+
         Transaction updatedTransaction = transactionRepository.save(transaction);
-    
-        return mapToDTO(updatedTransaction);
+
+        TransactionDTO updateTransactionDTO =  mapToDTO(updatedTransaction);
+
+        transactionNotificationController.notifyNewTransaction(updateTransactionDTO, "UPDATE");
+
+        return updateTransactionDTO;
     }
 
-    public List<TransactionDTO> getTransactionsByTypeAndDateRange(Long accountId, String type, LocalDate startDate, LocalDate endDate) {
+    public List<TransactionDTO> getTransactionsByTypeAndDateRange(Long accountId, String type, LocalDate startDate,
+            LocalDate endDate) {
         log.info("Buscando transacciones de tipo " + type + " entre " + startDate + " y " + endDate
                 + " para la cuenta con id: " + accountId);
-    
+
         Long userId = extractUserIdFromToken();
-    
+
         if (!isUserOwnerOrMemberOfAccount(userId, accountId)) {
             log.warning("El usuario con id " + userId + " no tiene permisos para ver transacciones de la cuenta con id "
                     + accountId);
             throw new IllegalStateException("No tienes permisos para ver transacciones de esta cuenta");
         }
-    
-        List<Transaction> transactions = transactionRepository.findByAccountIdAndTypeAndDateBetween(accountId, type, startDate, endDate);
-    
+
+        List<Transaction> transactions = transactionRepository.findByAccountIdAndTypeAndDateBetween(accountId, type,
+                startDate, endDate);
+
         return transactions.stream()
                 .map(this::mapToDTO)
                 .collect(Collectors.toList());

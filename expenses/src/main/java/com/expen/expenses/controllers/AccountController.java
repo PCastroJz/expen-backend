@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/accounts")
@@ -21,7 +22,7 @@ public class AccountController {
 
     @Autowired
     private AccountServices accountServices;
- 
+
     @Autowired
     private AccountUserServices accountUserServices;
 
@@ -52,17 +53,16 @@ public class AccountController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteAccount(@PathVariable Long id) {
-        accountServices.deleteAccount(id);
-        return ResponseEntity.noContent().build();
+    public ResponseEntity<Map<String, Object>> deleteAccount(@PathVariable Long id) {
+        Map<String, Object> response = accountServices.deleteAccount(id);
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/share-account")
     public ResponseEntity<AccountUserDTO> shareAccount(@Valid @RequestBody ShareAccountRequest shareAccountRequest) {
         AccountUserDTO accountUserDTO = accountUserServices.createAccountUser(
                 shareAccountRequest.getAccountId(),
-                shareAccountRequest.getEmail()
-        );
+                shareAccountRequest.getEmail());
         return ResponseEntity.ok(accountUserDTO);
     }
 

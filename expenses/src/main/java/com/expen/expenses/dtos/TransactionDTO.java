@@ -20,5 +20,6 @@ public class TransactionDTO {
     private String description;
     private Long accountId;
     private boolean schedule;
-    private Long idSchedule;
+    private boolean pay;
+    private String paymentMethod;
 }
